@@ -1,21 +1,21 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fit_track/main.dart';
+import 'package:fit_track/screens/splash_screen.dart';
 
 void main() {
-  testWidgets('FitTrack authentication screen loads successfully', (
+  testWidgets('FitTrack application starts successfully', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const FitTrackApp());
 
-    // AuthGate should show LoginScreen
-    // when there is no logged-in user.
-    expect(find.text('Welcome to FitTrack'), findsOneWidget);
+    // The application should start with
+    // the FitTrack splash screen.
+    expect(find.byType(SplashScreen), findsOneWidget);
 
-    expect(find.text('Login to track your fitness journey'), findsOneWidget);
-
-    expect(find.text('Login'), findsOneWidget);
-
-    expect(find.text('Create Account'), findsOneWidget);
+    // The splash screen should contain
+    // the FitTrack splash image.
+    expect(find.byType(Image), findsOneWidget);
   });
 }

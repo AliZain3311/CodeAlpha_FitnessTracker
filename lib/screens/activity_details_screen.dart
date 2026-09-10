@@ -239,7 +239,7 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
                     context,
                     icon: Icons.timer_outlined,
                     title: 'Duration',
-                    value: '${_activity.duration} min',
+                    value: _formatDuration(_activity.effectiveDurationSeconds),
                   ),
 
                   _buildMetricCard(
@@ -352,6 +352,26 @@ class _ActivityDetailsScreenState extends State<ActivityDetailsScreen> {
         ),
       ),
     );
+  }
+
+  String _formatDuration(int totalSeconds) {
+    if (totalSeconds <= 0) {
+      return '0 sec';
+    }
+
+    final int hours = totalSeconds ~/ 3600;
+    final int minutes = (totalSeconds % 3600) ~/ 60;
+    final int seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return '${hours}h ${minutes}m ${seconds}s';
+    }
+
+    if (minutes > 0) {
+      return '${minutes}m ${seconds}s';
+    }
+
+    return '${seconds}s';
   }
 
   Widget _buildMetricCard(

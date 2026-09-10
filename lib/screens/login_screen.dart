@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import 'dashboard_screen.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final VoidCallback? onRegisterTap;
@@ -60,14 +62,30 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Login successful!'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    // If a parent supplied a login callback,
+    // use it. Otherwise navigate directly.
+    if (widget.onLoginSuccess != null) {
+      widget.onLoginSuccess!.call();
+      return;
+    }
 
-    widget.onLoginSuccess?.call();
+    // Direct navigation for the current FitTrack app.
+    // Remove LoginScreen from the navigation stack
+    // so the user cannot return to it with Back.
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(builder: (_) => const DashboardScreen()),
+    );
+  }
+
+  void _openRegisterScreen() {
+    if (widget.onRegisterTap != null) {
+      widget.onRegisterTap!.call();
+      return;
+    }
+
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const RegisterScreen()));
   }
 
   String? _validateEmail(String? value) {
@@ -129,7 +147,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: primaryColor,
                       ),
                     ),
+
                     const SizedBox(height: 24),
+
                     const Text(
                       'Welcome to FitTrack',
                       textAlign: TextAlign.center,
@@ -138,7 +158,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+
                     const SizedBox(height: 8),
+
                     Text(
                       'Login to track your fitness journey',
                       textAlign: TextAlign.center,
@@ -147,7 +169,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
+
                     const SizedBox(height: 36),
+
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
@@ -166,7 +190,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       validator: _validateEmail,
                     ),
+
                     const SizedBox(height: 18),
+
                     TextFormField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
@@ -202,7 +228,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       validator: _validatePassword,
                     ),
+
                     const SizedBox(height: 28),
+
                     SizedBox(
                       height: 54,
                       child: FilledButton(
@@ -229,10 +257,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                       ),
                     ),
+
                     const SizedBox(height: 22),
 
-                    // Flexible layout prevents overflow
-                    // on small screens and test environments.
                     Wrap(
                       alignment: WrapAlignment.center,
                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -245,8 +272,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ).colorScheme.onSurfaceVariant,
                           ),
                         ),
+
                         TextButton(
-                          onPressed: widget.onRegisterTap,
+                          onPressed: _openRegisterScreen,
                           child: const Text('Create Account'),
                         ),
                       ],

@@ -20,12 +20,15 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
 
   final TextEditingController _durationController = TextEditingController();
 
+  final TextEditingController _distanceController = TextEditingController();
+
   bool _isLoading = true;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+
     _loadGoals();
   }
 
@@ -34,6 +37,8 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     _stepsController.dispose();
     _caloriesController.dispose();
     _durationController.dispose();
+    _distanceController.dispose();
+
     super.dispose();
   }
 
@@ -41,15 +46,18 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
     final String? userId = AuthService.currentUserId;
 
     if (userId == null) {
+      _setDefaultFields();
+
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
       }
+
       return;
     }
 
-    final FitnessGoals goals = await FitnessGoalsService.getGoalsForUser(
+    final FitnessGoals? goals = await FitnessGoalsService.getGoalsForUser(
       userId,
     );
 
@@ -57,15 +65,30 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       return;
     }
 
-    _stepsController.text = goals.dailySteps.toString();
+    if (goals == null) {
+      _setDefaultFields();
+    } else {
+      _stepsController.text = goals.dailySteps.toString();
 
-    _caloriesController.text = goals.dailyCalories.toStringAsFixed(0);
+      _caloriesController.text = goals.dailyCalories.toStringAsFixed(0);
 
-    _durationController.text = goals.dailyDuration.toString();
+      _durationController.text = goals.dailyDuration.toString();
+
+      _distanceController.text = goals.dailyDistanceKm.toStringAsFixed(
+        goals.dailyDistanceKm % 1 == 0 ? 0 : 1,
+      );
+    }
 
     setState(() {
       _isLoading = false;
     });
+  }
+
+  void _setDefaultFields() {
+    _stepsController.text = '0';
+    _caloriesController.text = '0';
+    _durationController.text = '0';
+    _distanceController.text = '0';
   }
 
   String? _validateSteps(String? value) {
@@ -81,8 +104,8 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       return 'Please enter a valid number.';
     }
 
-    if (steps <= 0) {
-      return 'Steps goal must be greater than 0.';
+    if (steps < 0) {
+      return 'Steps goal cannot be negative.';
     }
 
     if (steps > 100000) {
@@ -105,8 +128,8 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       return 'Please enter a valid number.';
     }
 
-    if (calories <= 0) {
-      return 'Calories goal must be greater than 0.';
+    if (calories < 0) {
+      return 'Calories goal cannot be negative.';
     }
 
     if (calories > 10000) {
@@ -129,12 +152,36 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       return 'Please enter a valid number.';
     }
 
-    if (duration <= 0) {
-      return 'Duration goal must be greater than 0.';
+    if (duration < 0) {
+      return 'Duration goal cannot be negative.';
     }
 
     if (duration > 1440) {
       return 'Duration goal cannot exceed 1,440 minutes.';
+    }
+
+    return null;
+  }
+
+  String? _validateDistance(String? value) {
+    final String text = value?.trim() ?? '';
+
+    if (text.isEmpty) {
+      return 'Please enter your distance goal.';
+    }
+
+    final double? distance = double.tryParse(text);
+
+    if (distance == null) {
+      return 'Please enter a valid number.';
+    }
+
+    if (distance < 0) {
+      return 'Distance goal cannot be negative.';
+    }
+
+    if (distance > 100) {
+      return 'Distance goal cannot exceed 100 km.';
     }
 
     return null;
@@ -156,6 +203,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+
       return;
     }
 
@@ -163,43 +211,64 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
       _isSaving = true;
     });
 
-    final FitnessGoals updatedGoals = FitnessGoals(
-      userId: userId,
-      dailySteps: int.parse(_stepsController.text.trim()),
-      dailyCalories: double.parse(_caloriesController.text.trim()),
-      dailyDuration: int.parse(_durationController.text.trim()),
-    );
+    try {
+      final FitnessGoals updatedGoals = FitnessGoals(
+        userId: userId,
+        dailySteps: int.parse(_stepsController.text.trim()),
+        dailyCalories: double.parse(_caloriesController.text.trim()),
+        dailyDuration: int.parse(_durationController.text.trim()),
+        dailyDistanceKm: double.parse(_distanceController.text.trim()),
+      );
 
-    await FitnessGoalsService.saveGoals(updatedGoals);
+      await FitnessGoalsService.saveGoals(updatedGoals);
 
-    if (!mounted) {
-      return;
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fitness goals saved successfully!'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to save goals: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
-
-    setState(() {
-      _isSaving = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Fitness goals updated successfully!'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-
-    Navigator.of(context).pop(true);
   }
 
   void _resetToDefaults() {
     setState(() {
-      _stepsController.text = '10000';
-      _caloriesController.text = '500';
-      _durationController.text = '60';
+      _stepsController.text = '0';
+      _caloriesController.text = '0';
+      _durationController.text = '0';
+      _distanceController.text = '0';
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Default goals restored. Tap Save Goals to apply them.'),
+        content: Text(
+          'Default goals restored to 0. Tap Save Goals to apply them.',
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -274,6 +343,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                               ],
                             ),
                           ),
+
                           const SizedBox(height: 24),
 
                           _buildGoalLabel(
@@ -281,7 +351,9 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                             title: 'Daily Steps',
                             subtitle: 'Target number of steps per day',
                           ),
+
                           const SizedBox(height: 10),
+
                           TextFormField(
                             controller: _stepsController,
                             keyboardType: TextInputType.number,
@@ -298,6 +370,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                             ),
                             validator: _validateSteps,
                           ),
+
                           const SizedBox(height: 22),
 
                           _buildGoalLabel(
@@ -305,7 +378,9 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                             title: 'Daily Calories',
                             subtitle: 'Target calories to burn per day',
                           ),
+
                           const SizedBox(height: 10),
+
                           TextFormField(
                             controller: _caloriesController,
                             keyboardType: const TextInputType.numberWithOptions(
@@ -324,6 +399,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                             ),
                             validator: _validateCalories,
                           ),
+
                           const SizedBox(height: 22),
 
                           _buildGoalLabel(
@@ -331,11 +407,13 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                             title: 'Daily Workout Duration',
                             subtitle: 'Target workout time per day',
                           ),
+
                           const SizedBox(height: 10),
+
                           TextFormField(
                             controller: _durationController,
                             keyboardType: TextInputType.number,
-                            textInputAction: TextInputAction.done,
+                            textInputAction: TextInputAction.next,
                             decoration: InputDecoration(
                               hintText: 'e.g. 60',
                               suffixText: 'minutes',
@@ -345,12 +423,40 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                               ),
                             ),
                             validator: _validateDuration,
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          _buildGoalLabel(
+                            icon: Icons.route_rounded,
+                            title: 'Daily Distance',
+                            subtitle: 'Target distance to cover per day',
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          TextFormField(
+                            controller: _distanceController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            textInputAction: TextInputAction.done,
+                            decoration: InputDecoration(
+                              hintText: 'e.g. 5',
+                              suffixText: 'km',
+                              prefixIcon: const Icon(Icons.route_outlined),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            validator: _validateDistance,
                             onFieldSubmitted: (_) {
                               if (!_isSaving) {
                                 _saveGoals();
                               }
                             },
                           ),
+
                           const SizedBox(height: 28),
 
                           SizedBox(
@@ -380,6 +486,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                               ),
                             ),
                           ),
+
                           const SizedBox(height: 12),
 
                           OutlinedButton.icon(
@@ -393,6 +500,7 @@ class _FitnessGoalsScreenState extends State<FitnessGoalsScreen> {
                             icon: const Icon(Icons.restart_alt_rounded),
                             label: const Text('Restore Default Goals'),
                           ),
+
                           const SizedBox(height: 18),
 
                           Container(

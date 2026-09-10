@@ -1,20 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'screens/all_goals_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/register_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/activity_service.dart';
 import 'services/auth_service.dart';
+import 'services/theme_service.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final WidgetsBinding widgetsBinding =
+      WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   await Hive.initFlutter();
 
   await AuthService.init();
-
   await ActivityService.init();
+  await ThemeService.init();
+
+  FlutterNativeSplash.remove();
 
   runApp(const FitTrackApp());
 }
@@ -24,27 +32,97 @@ class FitTrackApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'FitTrack',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.green,
-        scaffoldBackgroundColor: const Color(0xFFF7F9F7),
-        appBarTheme: const AppBarTheme(elevation: 0, centerTitle: false),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: ThemeService.isDarkMode,
+      builder: (context, isDarkMode, child) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'FitTrack',
+          theme: _lightTheme(),
+          darkTheme: _darkTheme(),
+          themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          home: const SplashScreen(nextScreen: AuthGate()),
+          routes: {'/all-goals': (context) => const AllGoalsScreen()},
+        );
+      },
+    );
+  }
+
+  ThemeData _lightTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF2563EB),
+        brightness: Brightness.light,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFFF8FAFC),
+        foregroundColor: Color(0xFF0F172A),
+        elevation: 0,
+        centerTitle: false,
+      ),
+      cardTheme: const CardThemeData(
+        color: Colors.white,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide(color: Color(0xFF2563EB), width: 1.5),
         ),
       ),
-      home: const AuthGate(),
+    );
+  }
+
+  ThemeData _darkTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: const Color(0xFF0F172A),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF60A5FA),
+        brightness: Brightness.dark,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF0F172A),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+      ),
+      cardTheme: const CardThemeData(
+        color: Color(0xFF1E293B),
+        elevation: 0,
+        margin: EdgeInsets.zero,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Color(0xFF1E293B),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide(color: Color(0xFF60A5FA), width: 1.5),
+        ),
+      ),
     );
   }
 }
@@ -57,77 +135,26 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  bool _showRegister = false;
-
-  void _showLogin() {
-    setState(() {
-      _showRegister = false;
-    });
-  }
-
-  void _showRegisterScreen() {
-    setState(() {
-      _showRegister = true;
-    });
-  }
+  bool _isLoggedIn = AuthService.isLoggedIn;
 
   void _handleLoginSuccess() {
     setState(() {
-      _showRegister = false;
+      _isLoggedIn = true;
     });
   }
 
-  void _handleRegisterSuccess() {
-    // Registration is successful, but the user
-    // is NOT automatically logged in.
-    //
-    // Therefore, return the user to Login screen.
+  void _handleLogout() {
     setState(() {
-      _showRegister = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Account created successfully. '
-          'Please login with your email and password.',
-        ),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  Future<void> _handleLogout() async {
-    await AuthService.logout();
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _showRegister = false;
+      _isLoggedIn = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // User is already authenticated.
-    if (AuthService.isLoggedIn) {
+    if (_isLoggedIn && AuthService.isLoggedIn) {
       return DashboardScreen(onLogout: _handleLogout);
     }
 
-    // Show Register screen.
-    if (_showRegister) {
-      return RegisterScreen(
-        onLoginTap: _showLogin,
-        onRegisterSuccess: _handleRegisterSuccess,
-      );
-    }
-
-    // Show Login screen.
-    return LoginScreen(
-      onRegisterTap: _showRegisterScreen,
-      onLoginSuccess: _handleLoginSuccess,
-    );
+    return LoginScreen(onLoginSuccess: _handleLoginSuccess);
   }
 }
