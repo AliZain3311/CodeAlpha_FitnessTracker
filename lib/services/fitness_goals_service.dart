@@ -25,6 +25,9 @@ class FitnessGoalsService {
   }
 
   /// Returns all saved fitness goals.
+  ///
+  /// Only goals that were actually saved by a user
+  /// are returned. No default goal is created here.
   static List<FitnessGoals> getAllGoals() {
     if (!Hive.isBoxOpen(_boxName)) {
       return <FitnessGoals>[];
@@ -42,11 +45,12 @@ class FitnessGoalsService {
         .toList();
   }
 
-  /// Returns goals for the specified user.
+  /// Returns the saved goals for a specific user.
   ///
-  /// If the user does not have saved goals,
-  /// default goals are created and returned.
-  static Future<FitnessGoals> getGoalsForUser(String userId) async {
+  /// If the user has never created a goal, this returns null.
+  /// This is important because "no goal" and "goal = 0"
+  /// must not be treated as the same saved goal.
+  static Future<FitnessGoals?> getGoalsForUser(String userId) async {
     await init();
 
     final List<FitnessGoals> allGoals = getAllGoals();
@@ -57,24 +61,22 @@ class FitnessGoalsService {
       }
     }
 
-    final FitnessGoals defaultGoals = FitnessGoals(
-      userId: userId,
-      dailySteps: 10000,
-      dailyCalories: 500,
-      dailyDuration: 60,
-    );
-
-    allGoals.add(defaultGoals);
-
-    await _saveGoals(allGoals);
-
-    return defaultGoals;
+    return null;
   }
 
-  /// Saves or updates goals for a specific user.
+  /// Returns true when the user has a saved goal.
+  static Future<bool> hasGoalForUser(String userId) async {
+    final FitnessGoals? goals = await getGoalsForUser(userId);
+
+    return goals != null;
+  }
+
+  /// Saves a new goal or replaces the existing
+  /// goal for the specified user.
   ///
-  /// Existing goals belonging to another user
-  /// cannot be modified through this method.
+  /// A zero-value goal is allowed to be stored,
+  /// but the UI should normally use null/no goal
+  /// to represent that no goal has been created.
   static Future<void> saveGoals(FitnessGoals goals) async {
     await init();
 
@@ -96,7 +98,7 @@ class FitnessGoalsService {
   /// Updates goals only for the supplied user.
   ///
   /// Returns true when the goals were updated.
-  /// Returns false when no goals exist for that user.
+  /// Returns false when no saved goals exist.
   static Future<bool> updateGoals({
     required String userId,
     required FitnessGoals updatedGoals,
@@ -118,10 +120,9 @@ class FitnessGoalsService {
     return true;
   }
 
-  /// Deletes goals only for the supplied user.
+  /// Deletes the saved goal for the supplied user.
   ///
-  /// Returns true when goals were deleted.
-  /// Returns false when no goals were found.
+  /// This means the user has no active goal.
   static Future<bool> deleteGoals(String userId) async {
     await init();
 
@@ -140,11 +141,10 @@ class FitnessGoalsService {
     return true;
   }
 
-  /// Deletes all goals.
+  /// Deletes all saved goals.
   ///
-  /// This method is intended for local data
-  /// cleanup/testing and is not used for
-  /// normal user operations.
+  /// Intended for local cleanup/testing only.
+  /// Normal user operations should use deleteGoals().
   static Future<void> clearAllGoals() async {
     await init();
 

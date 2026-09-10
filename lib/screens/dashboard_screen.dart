@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../models/activity_model.dart';
-import '../models/fitness_goals_model.dart';
 import '../models/user_model.dart';
 import '../services/activity_service.dart';
 import '../services/auth_service.dart';
-import '../services/fitness_goals_service.dart';
-import 'activity_details_screen.dart';
+import '../widgets/app_drawer.dart';
 import 'add_activity_screen.dart';
-import 'fitness_goals_screen.dart';
-import 'weekly_dashboard_screen.dart';
+import 'workout_tracker_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback? onLogout;
@@ -24,71 +20,42 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   List<Activity> _activities = <Activity>[];
 
-  FitnessGoals? _fitnessGoals;
-
-  bool _isLoadingGoals = true;
-
   @override
   void initState() {
     super.initState();
     _loadActivities();
-    _loadGoals();
   }
 
   void _loadActivities() {
     final String? userId = AuthService.currentUserId;
 
     if (userId == null) {
+      if (!mounted) return;
+
       setState(() {
         _activities = <Activity>[];
       });
+
       return;
     }
 
-    final List<Activity> userActivities = ActivityService.getActivitiesForUser(
+    final List<Activity> activities = ActivityService.getActivitiesForUser(
       userId,
     );
 
-    userActivities.sort((a, b) => b.date.compareTo(a.date));
+    activities.sort((a, b) => b.date.compareTo(a.date));
+
+    if (!mounted) return;
 
     setState(() {
-      _activities = userActivities;
-    });
-  }
-
-  Future<void> _loadGoals() async {
-    final String? userId = AuthService.currentUserId;
-
-    if (userId == null) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _fitnessGoals = null;
-        _isLoadingGoals = false;
-      });
-
-      return;
-    }
-
-    final FitnessGoals goals = await FitnessGoalsService.getGoalsForUser(
-      userId,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _fitnessGoals = goals;
-      _isLoadingGoals = false;
+      _activities = activities;
     });
   }
 
   Future<void> _refreshDashboard() async {
     _loadActivities();
-    await _loadGoals();
+
+    await Future<void>.delayed(const Duration(milliseconds: 250));
   }
 
   List<Activity> get _todayActivities {
@@ -101,45 +68,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }).toList();
   }
 
-  int get _todayCalories {
-    return _todayActivities.fold(
-      0,
-      (total, activity) => total + activity.calories.round(),
-    );
-  }
-
   int get _todaySteps {
-    return _todayActivities.fold(
+    return _todayActivities.fold<int>(
       0,
       (total, activity) => total + activity.steps,
     );
   }
 
-  int get _todayDuration {
-    return _todayActivities.fold(
+  int get _todayCalories {
+    return _todayActivities.fold<int>(
       0,
-      (total, activity) => total + activity.duration,
+      (total, activity) => total + activity.calories.round(),
     );
   }
 
-  int get _totalWorkouts {
-    return _activities.length;
+  int get _todayDurationSeconds {
+    return _todayActivities.fold<int>(
+      0,
+      (total, activity) => total + activity.effectiveDurationSeconds,
+    );
   }
 
-  double _calculateProgress(double current, double target) {
-    if (target <= 0) {
-      return 0;
-    }
-
-    return (current / target).clamp(0.0, 1.0).toDouble();
+  int get _todayWorkoutCount {
+    return _todayActivities.length;
   }
 
-  int _calculatePercentage(double current, double target) {
-    if (target <= 0) {
-      return 0;
+  String _formatDuration(int totalSeconds) {
+    if (totalSeconds <= 0) {
+      return '0 sec';
     }
 
-    return ((current / target) * 100).round();
+    final int hours = totalSeconds ~/ 3600;
+
+    final int minutes = (totalSeconds % 3600) ~/ 60;
+
+    final int seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+
+    if (minutes > 0) {
+      return '${minutes}m ${seconds}s';
+    }
+
+    return '${seconds}s';
+  }
+
+  Future<void> _openWorkoutTracker() async {
+    final bool? workoutCompleted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (_) => const WorkoutTrackerScreen()),
+    );
+
+    if (!mounted) return;
+
+    if (workoutCompleted == true) {
+      _loadActivities();
+    }
   }
 
   Future<void> _openAddActivity() async {
@@ -147,80 +132,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       MaterialPageRoute<bool>(builder: (_) => const AddActivityScreen()),
     );
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     if (activityAdded == true) {
       _loadActivities();
-    }
-  }
-
-  Future<void> _openFitnessGoals() async {
-    final bool? goalsUpdated = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(builder: (_) => const FitnessGoalsScreen()),
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    if (goalsUpdated == true) {
-      await _loadGoals();
-    }
-  }
-
-  void _openActivityDetails(Activity activity) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ActivityDetailsScreen(activity: activity),
-      ),
-    );
-  }
-
-  void _openWeeklyDashboard() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const WeeklyDashboardScreen()),
-    );
-  }
-
-  Future<void> _logout() async {
-    await AuthService.logout();
-
-    if (!mounted) {
-      return;
-    }
-
-    widget.onLogout?.call();
-  }
-
-  Future<void> _confirmLogout() async {
-    final bool? shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: const Text('Logout'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldLogout == true) {
-      await _logout();
     }
   }
 
@@ -228,86 +143,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final AppUser? user = AuthService.getCurrentUser();
 
-    final String userName = user?.name.isNotEmpty == true ? user!.name : 'User';
+    final String userName = user?.name.trim().isNotEmpty == true
+        ? user!.name.trim()
+        : 'User';
 
     final String firstName = userName.split(' ').first;
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
+
+      drawer: AppDrawer(onLogout: widget.onLogout ?? () {}),
+
       appBar: AppBar(
+        elevation: 0,
+        centerTitle: false,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+
+        leading: Builder(
+          builder: (context) {
+            return IconButton(
+              tooltip: 'Menu',
+              icon: const Icon(Icons.menu_rounded, size: 29),
+              onPressed: () {
+                Scaffold.of(context).openDrawer();
+              },
+            );
+          },
+        ),
+
         title: const Text(
           'FitTrack',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
         ),
-        centerTitle: false,
+
         actions: [
-          IconButton(
-            tooltip: 'Fitness Goals',
-            onPressed: _openFitnessGoals,
-            icon: const Icon(Icons.track_changes_rounded),
-          ),
-          IconButton(
-            tooltip: 'Weekly Progress',
-            onPressed: _openWeeklyDashboard,
-            icon: const Icon(Icons.bar_chart_rounded),
-          ),
           IconButton(
             tooltip: 'Refresh',
             onPressed: _refreshDashboard,
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.refresh_rounded, size: 26),
           ),
-          IconButton(
-            tooltip: 'Logout',
-            onPressed: _confirmLogout,
-            icon: const Icon(Icons.logout_rounded),
-          ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
         ],
       ),
+
       body: RefreshIndicator(
         onRefresh: _refreshDashboard,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 35),
+
           children: [
-            _buildWelcomeSection(context, firstName),
+            _buildWelcomeCard(context, firstName),
+
+            const SizedBox(height: 20),
+
+            _buildRealTimeWorkoutCard(context),
+
             const SizedBox(height: 22),
-            _buildWeeklyProgressCard(context),
+
+            _buildTodayOverview(context),
+
+            const SizedBox(height: 22),
+
+            _buildLogActivityCard(context),
+
             const SizedBox(height: 18),
-            _buildGoalsProgressCard(context),
-            const SizedBox(height: 18),
-            _buildSummaryGrid(context),
-            const SizedBox(height: 28),
-            _buildSectionHeader(
-              context,
-              title: 'Today\'s Activity',
-              subtitle: '${_todayActivities.length} activities recorded',
-            ),
-            const SizedBox(height: 12),
-            _buildTodayActivitySection(context),
-            const SizedBox(height: 28),
-            _buildSectionHeader(
-              context,
-              title: 'Recent Activities',
-              subtitle: 'Your latest fitness records',
-            ),
-            const SizedBox(height: 12),
-            _buildRecentActivities(context),
+
+            _buildMotivationCard(context),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddActivity,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Log Activity'),
       ),
     );
   }
 
-  Widget _buildWelcomeSection(BuildContext context, String firstName) {
+  Widget _buildWelcomeCard(BuildContext context, String firstName) {
     final Color primaryColor = Theme.of(context).colorScheme.primary;
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -315,46 +229,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: primaryColor.withValues(alpha: 0.18),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 58,
-            height: 58,
+            width: 62,
+            height: 62,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
+              color: Colors.white.withValues(alpha: 0.17),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.waving_hand_rounded,
               color: Colors.white,
-              size: 30,
+              size: 31,
             ),
           ),
+
           const SizedBox(width: 16),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'Welcome back! 👋',
-                  style: TextStyle(color: Colors.white, fontSize: 14),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
+
                 const SizedBox(height: 4),
+
                 Text(
                   firstName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 27,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+
                 const SizedBox(height: 5),
+
                 const Text(
-                  'Let\'s keep moving today.',
+                  'Ready to move today?',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: Colors.white, fontSize: 13),
                 ),
               ],
@@ -365,58 +298,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildWeeklyProgressCard(BuildContext context) {
+  Widget _buildRealTimeWorkoutCard(BuildContext context) {
     final Color primaryColor = Theme.of(context).colorScheme.primary;
 
     return Card(
       elevation: 0,
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: _openWeeklyDashboard,
-        borderRadius: BorderRadius.circular(12),
+        onTap: _openWorkoutTracker,
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(20),
           child: Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 62,
+                height: 62,
                 decoration: BoxDecoration(
-                  color: primaryColor.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(15),
+                  color: primaryColor.withValues(alpha: 0.11),
+                  shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.bar_chart_rounded,
+                  Icons.play_arrow_rounded,
                   color: primaryColor,
-                  size: 28,
+                  size: 36,
                 ),
               ),
-              const SizedBox(width: 14),
+
+              const SizedBox(width: 16),
+
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Weekly Progress',
+                      'Start Real-Time Workout',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 17,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    SizedBox(height: 4),
+
+                    SizedBox(height: 6),
+
                     Text(
-                      'View your last 7 days of fitness progress',
+                      'Track your movement, steps, distance and calories live.',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12),
+                      style: TextStyle(fontSize: 12, height: 1.45),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+
+              const SizedBox(width: 8),
+
+              Icon(Icons.chevron_right_rounded, color: primaryColor, size: 29),
             ],
           ),
         ),
@@ -424,250 +363,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildGoalsProgressCard(BuildContext context) {
-    final Color primaryColor = Theme.of(context).colorScheme.primary;
-
-    if (_isLoadingGoals) {
-      return Card(
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.track_changes_rounded, color: primaryColor),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Today\'s Goals',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const SizedBox(
-                height: 28,
-                width: 28,
-                child: CircularProgressIndicator(strokeWidth: 2.5),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final FitnessGoals? goals = _fitnessGoals;
-
-    if (goals == null) {
-      return Card(
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Icon(Icons.track_changes_rounded, size: 42, color: primaryColor),
-              const SizedBox(height: 10),
-              const Text(
-                'Set Your Fitness Goals',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Create daily targets to track your progress.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 14),
-              OutlinedButton.icon(
-                onPressed: _openFitnessGoals,
-                icon: const Icon(Icons.flag_outlined),
-                label: const Text('Set Goals'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final double stepsProgress = _calculateProgress(
-      _todaySteps.toDouble(),
-      goals.dailySteps.toDouble(),
-    );
-
-    final double caloriesProgress = _calculateProgress(
-      _todayCalories.toDouble(),
-      goals.dailyCalories,
-    );
-
-    final double durationProgress = _calculateProgress(
-      _todayDuration.toDouble(),
-      goals.dailyDuration.toDouble(),
-    );
-
-    final int stepsPercentage = _calculatePercentage(
-      _todaySteps.toDouble(),
-      goals.dailySteps.toDouble(),
-    );
-
-    final int caloriesPercentage = _calculatePercentage(
-      _todayCalories.toDouble(),
-      goals.dailyCalories,
-    );
-
-    final int durationPercentage = _calculatePercentage(
-      _todayDuration.toDouble(),
-      goals.dailyDuration.toDouble(),
-    );
-
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: primaryColor.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    Icons.track_changes_rounded,
-                    color: primaryColor,
-                    size: 25,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Today\'s Goals',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 3),
-                      Text(
-                        'Track your daily targets',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Edit Goals',
-                  onPressed: _openFitnessGoals,
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _buildGoalProgressItem(
-              context,
-              icon: Icons.directions_walk_rounded,
-              title: 'Steps',
-              current: '$_todaySteps',
-              target: '${goals.dailySteps}',
-              unit: 'steps',
-              progress: stepsProgress,
-              percentage: stepsPercentage,
-            ),
-            const SizedBox(height: 20),
-            _buildGoalProgressItem(
-              context,
-              icon: Icons.local_fire_department_rounded,
-              title: 'Calories',
-              current: '$_todayCalories',
-              target: '${goals.dailyCalories.round()}',
-              unit: 'kcal',
-              progress: caloriesProgress,
-              percentage: caloriesPercentage,
-            ),
-            const SizedBox(height: 20),
-            _buildGoalProgressItem(
-              context,
-              icon: Icons.timer_rounded,
-              title: 'Workout Duration',
-              current: '$_todayDuration',
-              target: '${goals.dailyDuration}',
-              unit: 'min',
-              progress: durationProgress,
-              percentage: durationPercentage,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGoalProgressItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String current,
-    required String target,
-    required String unit,
-    required double progress,
-    required int percentage,
-  }) {
-    final Color primaryColor = Theme.of(context).colorScheme.primary;
-
-    final bool isCompleted = percentage >= 100;
-
+  Widget _buildTodayOverview(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 21, color: primaryColor),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            if (isCompleted) const Icon(Icons.check_circle_rounded, size: 19),
-            const SizedBox(width: 5),
-            Text(
-              '$percentage%',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
-              ),
-            ),
-          ],
+        const Text(
+          'Today\'s Overview',
+          style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
         ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: LinearProgressIndicator(value: progress, minHeight: 10),
+
+        const SizedBox(height: 5),
+
+        Text(
+          'Your key fitness numbers for today',
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
-        const SizedBox(height: 7),
-        Row(
+
+        const SizedBox(height: 14),
+
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 14,
+          mainAxisSpacing: 14,
+
           children: [
-            Text(
-              '$current $unit',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            _buildOverviewCard(
+              context,
+              icon: Icons.directions_walk_rounded,
+              title: 'Steps',
+              value: '$_todaySteps',
+              unit: 'steps',
             ),
-            const Spacer(),
-            Text(
-              'Goal: $target $unit',
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+
+            _buildOverviewCard(
+              context,
+              icon: Icons.local_fire_department_rounded,
+              title: 'Calories',
+              value: '$_todayCalories',
+              unit: 'kcal',
+            ),
+
+            _buildOverviewCard(
+              context,
+              icon: Icons.timer_rounded,
+              title: 'Duration',
+              value: _formatDuration(_todayDurationSeconds),
+              unit: 'today',
+            ),
+
+            _buildOverviewCard(
+              context,
+              icon: Icons.fitness_center_rounded,
+              title: 'Workouts',
+              value: '$_todayWorkoutCount',
+              unit: 'today',
             ),
           ],
         ),
@@ -675,48 +429,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSummaryGrid(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 14,
-      crossAxisSpacing: 14,
-      childAspectRatio: 1.45,
-      children: [
-        _buildStatCard(
-          context,
-          icon: Icons.local_fire_department_rounded,
-          title: 'Calories',
-          value: '$_todayCalories',
-          unit: 'kcal',
-        ),
-        _buildStatCard(
-          context,
-          icon: Icons.directions_walk_rounded,
-          title: 'Steps',
-          value: '$_todaySteps',
-          unit: 'steps',
-        ),
-        _buildStatCard(
-          context,
-          icon: Icons.timer_rounded,
-          title: 'Duration',
-          value: '$_todayDuration',
-          unit: 'min',
-        ),
-        _buildStatCard(
-          context,
-          icon: Icons.fitness_center_rounded,
-          title: 'Workouts',
-          value: '$_totalWorkouts',
-          unit: 'total',
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(
+  Widget _buildOverviewCard(
     BuildContext context, {
     required IconData icon,
     required String title,
@@ -727,45 +440,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Card(
       elevation: 0,
+      margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Icon(icon, size: 22, color: primaryColor),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: primaryColor.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: primaryColor, size: 22),
             ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+
+            const SizedBox(height: 3),
+
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ),
+
                 const SizedBox(width: 5),
+
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
+                  padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
                     unit,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
@@ -778,153 +510,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSectionHeader(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            subtitle,
-            textAlign: TextAlign.end,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTodayActivitySection(BuildContext context) {
-    if (_todayActivities.isEmpty) {
-      return _buildEmptyCard(
-        context,
-        icon: Icons.directions_run_rounded,
-        title: 'No activity today',
-        message: 'Start your fitness journey by logging an activity.',
-      );
-    }
-
-    return Column(
-      children: _todayActivities
-          .take(3)
-          .map((activity) => _buildActivityCard(context, activity))
-          .toList(),
-    );
-  }
-
-  Widget _buildRecentActivities(BuildContext context) {
-    if (_activities.isEmpty) {
-      return _buildEmptyCard(
-        context,
-        icon: Icons.history_rounded,
-        title: 'No recent activities',
-        message: 'Your logged activities will appear here.',
-      );
-    }
-
-    return Column(
-      children: _activities
-          .take(5)
-          .map((activity) => _buildActivityCard(context, activity))
-          .toList(),
-    );
-  }
-
-  Widget _buildActivityCard(BuildContext context, Activity activity) {
+  Widget _buildLogActivityCard(BuildContext context) {
     final Color primaryColor = Theme.of(context).colorScheme.primary;
 
     return Card(
       elevation: 0,
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () {
-          _openActivityDetails(activity);
-        },
-        borderRadius: BorderRadius.circular(12),
+        onTap: _openAddActivity,
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(18),
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
                   color: primaryColor.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                child: Icon(
-                  _getActivityIcon(activity.type),
-                  color: primaryColor,
-                ),
+                child: Icon(Icons.add_rounded, color: primaryColor, size: 28),
               ),
+
               const SizedBox(width: 14),
-              Expanded(
+
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      activity.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                      'Log Activity',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 5),
+
+                    SizedBox(height: 4),
+
                     Text(
-                      '${activity.type} • ${activity.duration} min',
+                      'Manually record your workout',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                      style: TextStyle(fontSize: 12),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${activity.calories.round()} kcal',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: primaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    DateFormat('dd MMM').format(activity.date),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 4),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+
+              Icon(Icons.chevron_right_rounded, color: primaryColor, size: 27),
             ],
           ),
         ),
@@ -932,60 +567,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildEmptyCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String message,
-  }) {
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          children: [
-            Icon(icon, size: 46, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              textAlign: TextAlign.center,
+  Widget _buildMotivationCard(BuildContext context) {
+    final Color primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: primaryColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.favorite_rounded, color: primaryColor, size: 22),
+
+          const SizedBox(width: 10),
+
+          const Expanded(
+            child: Text(
+              'Small steps every day lead to big results.',
               style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
-  }
-
-  IconData _getActivityIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'running':
-        return Icons.directions_run_rounded;
-      case 'walking':
-        return Icons.directions_walk_rounded;
-      case 'cycling':
-        return Icons.directions_bike_rounded;
-      case 'swimming':
-        return Icons.pool_rounded;
-      case 'gym':
-      case 'strength':
-      case 'weight training':
-        return Icons.fitness_center_rounded;
-      case 'yoga':
-        return Icons.self_improvement_rounded;
-      case 'sports':
-        return Icons.sports_soccer_rounded;
-      default:
-        return Icons.sports_rounded;
-    }
   }
 }

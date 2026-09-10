@@ -2,7 +2,9 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../models/activity_model.dart';
 import '../models/weekly_stats_model.dart';
+import '../services/activity_service.dart';
 import '../services/auth_service.dart';
 import '../services/weekly_stats_service.dart';
 
@@ -15,6 +17,7 @@ class WeeklyDashboardScreen extends StatefulWidget {
 
 class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
   List<WeeklyStats> _weeklyStats = <WeeklyStats>[];
+  List<int> _weeklyDurationSeconds = <int>[];
 
   @override
   void initState() {
@@ -36,17 +39,43 @@ class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
       userId,
     );
 
+    final List<Activity> activities = ActivityService.getActivitiesForUser(
+      userId,
+    );
+
+    final DateTime today = DateTime.now();
+    final List<int> exactDurations = <int>[];
+
+    for (int dayOffset = 6; dayOffset >= 0; dayOffset--) {
+      final DateTime date = DateTime(
+        today.year,
+        today.month,
+        today.day,
+      ).subtract(Duration(days: dayOffset));
+
+      final int seconds = activities
+          .where(
+            (activity) =>
+                activity.date.year == date.year &&
+                activity.date.month == date.month &&
+                activity.date.day == date.day,
+          )
+          .fold(
+            0,
+            (total, activity) => total + activity.effectiveDurationSeconds,
+          );
+
+      exactDurations.add(seconds);
+    }
+
     setState(() {
       _weeklyStats = stats;
+      _weeklyDurationSeconds = exactDurations;
     });
   }
 
   int get _totalActivities {
     return _weeklyStats.fold(0, (total, day) => total + day.activityCount);
-  }
-
-  int get _totalDuration {
-    return _weeklyStats.fold(0, (total, day) => total + day.duration);
   }
 
   int get _totalSteps {
@@ -82,9 +111,16 @@ class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
       return 0;
     }
 
-    return WeeklyStatsService.getAverageDailyDuration(
-      AuthService.currentUserId ?? '',
+    if (_weeklyDurationSeconds.isEmpty) {
+      return 0;
+    }
+
+    final int totalSeconds = _weeklyDurationSeconds.fold(
+      0,
+      (total, seconds) => total + seconds,
     );
+
+    return totalSeconds / 60 / _weeklyDurationSeconds.length;
   }
 
   WeeklyStats? get _mostActiveDay {
@@ -160,16 +196,15 @@ class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
       return 60;
     }
 
-    final int maxValue = _weeklyStats.fold(
-      0,
-      (max, day) => day.duration > max ? day.duration : max,
-    );
+    final int maxValue = _weeklyDurationSeconds.isEmpty
+        ? 0
+        : _weeklyDurationSeconds.reduce((a, b) => a > b ? a : b);
 
     if (maxValue <= 0) {
       return 60;
     }
 
-    return _roundedChartMax(maxValue.toDouble());
+    return _roundedChartMax((maxValue / 60).toDouble());
   }
 
   double _roundedChartMax(double value) {
@@ -251,7 +286,7 @@ class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
             _buildChartCard(
               context,
               title: 'Workout Duration',
-              subtitle: 'Daily workout minutes for the last 7 days',
+              subtitle: 'Daily workout duration for the last 7 days',
               icon: Icons.timer_rounded,
               chart: _buildDurationChart(context),
             ),
@@ -355,8 +390,10 @@ class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
           context,
           icon: Icons.timer_rounded,
           title: 'Duration',
-          value: '$_totalDuration',
-          unit: 'min',
+          value: _formatChartDuration(
+            _weeklyDurationSeconds.fold(0, (total, seconds) => total + seconds),
+          ),
+          unit: 'total',
         ),
       ],
     );
@@ -482,7 +519,7 @@ class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
                 context,
                 icon: Icons.timer_rounded,
                 title: 'Average Duration',
-                value: '${_averageDuration.round()} min',
+                value: _formatChartDuration((_averageDuration * 60).round()),
                 subtitle: 'per day',
               ),
               const SizedBox(height: 10),
@@ -907,7 +944,7 @@ class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
 
                     return LineTooltipItem(
                       '${DateFormat('EEE').format(day.date)}\n'
-                      '${day.duration} min',
+                      '${_formatChartDuration(_weeklyDurationSeconds[index])}',
                       const TextStyle(fontWeight: FontWeight.bold),
                     );
                   })
@@ -924,7 +961,7 @@ class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
                 .map(
                   (entry) => FlSpot(
                     entry.key.toDouble(),
-                    entry.value.duration.toDouble(),
+                    (_weeklyDurationSeconds[entry.key] / 60).toDouble(),
                   ),
                 )
                 .toList(),
@@ -959,6 +996,26 @@ class _WeeklyDashboardScreenState extends State<WeeklyDashboardScreen> {
         ),
       ),
     );
+  }
+
+  String _formatChartDuration(int totalSeconds) {
+    if (totalSeconds <= 0) {
+      return '0 sec';
+    }
+
+    final int hours = totalSeconds ~/ 3600;
+    final int minutes = (totalSeconds % 3600) ~/ 60;
+    final int seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return '${hours}h ${minutes}m ${seconds}s';
+    }
+
+    if (minutes > 0) {
+      return '${minutes}m ${seconds}s';
+    }
+
+    return '${seconds}s';
   }
 
   double _chartInterval(double maxY) {

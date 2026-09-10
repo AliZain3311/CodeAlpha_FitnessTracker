@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   final VoidCallback? onLoginTap;
@@ -107,8 +108,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     final String? error = await AuthService.register(
-      name: _nameController.text,
-      email: _emailController.text,
+      name: _nameController.text.trim(),
+      email: _emailController.text.trim(),
       password: _passwordController.text,
     );
 
@@ -127,16 +128,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    // Registration is successful.
+    // Do not auto-login. Return to Login screen.
+    if (widget.onRegisterSuccess != null) {
+      widget.onRegisterSuccess!.call();
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Account created successfully!'),
+        content: Text('Account created successfully! Please login.'),
         behavior: SnackBarBehavior.floating,
       ),
     );
 
-    if (widget.onRegisterSuccess != null) {
-      widget.onRegisterSuccess!();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+
+    if (!mounted) {
+      return;
     }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  void _openLogin() {
+    if (widget.onLoginTap != null) {
+      widget.onLoginTap!.call();
+      return;
+    }
+
+    Navigator.of(context).pop();
   }
 
   @override
@@ -145,31 +169,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Create Account'), centerTitle: true),
+
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
+
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 430),
+
               child: Form(
                 key: _formKey,
+
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
+
                   children: [
                     Container(
                       width: 82,
                       height: 82,
+
                       decoration: BoxDecoration(
                         color: primaryColor.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
+
                       child: Icon(
                         Icons.person_add_alt_1,
                         size: 44,
                         color: primaryColor,
                       ),
                     ),
+
                     const SizedBox(height: 20),
+
                     const Text(
                       'Join FitTrack',
                       textAlign: TextAlign.center,
@@ -178,7 +211,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+
                     const SizedBox(height: 8),
+
                     Text(
                       'Create your personal fitness account',
                       textAlign: TextAlign.center,
@@ -187,6 +222,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
+
                     const SizedBox(height: 30),
 
                     TextFormField(
@@ -194,6 +230,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       textCapitalization: TextCapitalization.words,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.name],
+
                       decoration: InputDecoration(
                         labelText: 'Full Name',
                         hintText: 'Enter your full name',
@@ -202,6 +239,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
+
                       validator: _validateName,
                     ),
 
@@ -212,6 +250,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
+
                       decoration: InputDecoration(
                         labelText: 'Email',
                         hintText: 'Enter your email',
@@ -220,6 +259,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
+
                       validator: _validateEmail,
                     ),
 
@@ -230,29 +270,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.newPassword],
+
                       decoration: InputDecoration(
                         labelText: 'Password',
                         hintText: 'Minimum 6 characters',
                         prefixIcon: const Icon(Icons.lock_outline),
+
                         suffixIcon: IconButton(
                           tooltip: _obscurePassword
                               ? 'Show password'
                               : 'Hide password',
+
                           onPressed: () {
                             setState(() {
                               _obscurePassword = !_obscurePassword;
                             });
                           },
+
                           icon: Icon(
                             _obscurePassword
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
                           ),
                         ),
+
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
+
                       validator: _validatePassword,
                     ),
 
@@ -263,35 +309,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       obscureText: _obscureConfirmPassword,
                       textInputAction: TextInputAction.done,
                       autofillHints: const [AutofillHints.newPassword],
+
                       onFieldSubmitted: (_) {
                         if (!_isLoading) {
                           _register();
                         }
                       },
+
                       decoration: InputDecoration(
                         labelText: 'Confirm Password',
                         hintText: 'Re-enter your password',
                         prefixIcon: const Icon(Icons.lock_reset_outlined),
+
                         suffixIcon: IconButton(
                           tooltip: _obscureConfirmPassword
                               ? 'Show password'
                               : 'Hide password',
+
                           onPressed: () {
                             setState(() {
                               _obscureConfirmPassword =
                                   !_obscureConfirmPassword;
                             });
                           },
+
                           icon: Icon(
                             _obscureConfirmPassword
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
                           ),
                         ),
+
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
+
                       validator: _validateConfirmPassword,
                     ),
 
@@ -299,13 +352,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     SizedBox(
                       height: 54,
+
                       child: FilledButton(
                         onPressed: _isLoading ? null : _register,
+
                         style: FilledButton.styleFrom(
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
+
                         child: _isLoading
                             ? const SizedBox(
                                 width: 24,
@@ -328,6 +384,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
+
                       children: [
                         Text(
                           'Already have an account?',
@@ -337,8 +394,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ).colorScheme.onSurfaceVariant,
                           ),
                         ),
+
                         TextButton(
-                          onPressed: widget.onLoginTap,
+                          onPressed: _openLogin,
                           child: const Text('Login'),
                         ),
                       ],
