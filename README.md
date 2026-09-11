@@ -548,47 +548,107 @@ build/app/outputs/flutter-apk/
 
 ---
 
+---
+
 ## 📸 Application Screenshots
 
 <div align="center">
 
-**🏠 Dashboard**
+### 🚀 Splash Screen
+
 <br>
-<img src="screenshots/dashboard.png" width="280">
+
+<img src="assets/screenshots/01-splash.png" width="280">
 
 <br><br>
 
-**🏃 Real-Time Workout**
+### 🔐 Login
+
 <br>
-<img src="screenshots/workout_tracker.png" width="280">
+
+<img src="assets/screenshots/02-login.png" width="280">
 
 <br><br>
 
-**🎯 Fitness Goals**
+### 📝 Sign Up
+
 <br>
-<img src="screenshots/fitness_goals.png" width="280">
+
+<img src="assets/screenshots/03-signup.png" width="280">
 
 <br><br>
 
-**📊 Statistics**
+### 🏠 Dashboard
+
 <br>
-<img src="screenshots/statistics.png" width="280">
+
+<img src="assets/screenshots/04-dashboard.png" width="280">
 
 <br><br>
 
-**👤 Profile**
+### 🧭 Navigation Drawer
+
 <br>
-<img src="screenshots/profile.png" width="280">
+
+<img src="assets/screenshots/05-drawer.png" width="280">
 
 <br><br>
 
-**🌙 Dark Mode**
+### 📝 Log Activity
+
 <br>
-<img src="screenshots/dark_mode.png" width="280">
+
+<img src="assets/screenshots/06-log-activity.png" width="280">
+
+<br><br>
+
+### 🎯 Fitness Goals
+
+<br>
+
+<img src="assets/screenshots/07-fitness-goals.png" width="280">
+
+<br><br>
+
+### 🏃 Real-Time Workout
+
+<br>
+
+<img src="assets/screenshots/08-realtime-workout.png" width="280">
+
+<br><br>
+
+### 🎯 Goal Workout Progress
+
+<br>
+
+<img src="assets/screenshots/09-goal-progress.png" width="280">
+
+<br><br>
+
+### 📊 Statistics
+
+<br>
+
+<img src="assets/screenshots/10-statistics.png" width="280">
+
+<br><br>
+
+### 👤 Profile
+
+<br>
+
+<img src="assets/screenshots/11-profile.png" width="280">
+
+<br><br>
+
+### 🌙 Dark Mode
+
+<br>
+
+<img src="assets/screenshots/12-dark-mode.png" width="280">
 
 </div>
-
-> 📌 **Note:** Add your final screenshots to the `screenshots/` directory using the filenames shown above.
 
 ---
 
